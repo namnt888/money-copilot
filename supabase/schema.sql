@@ -8,6 +8,7 @@ create type public.account_type as enum ('cash', 'bank', 'credit_card', 'ewallet
 create type public.account_status as enum ('active', 'inactive', 'closed');
 create type public.transaction_type as enum ('expense', 'income', 'transfer', 'debt_disbursement', 'debt_repayment', 'refund', 'cashback', 'installment_payment', 'adjustment');
 create type public.transaction_status as enum ('pending', 'posted', 'voided');
+create type public.transfer_side as enum ('in', 'out');
 create type public.cashback_cycle_status as enum ('open', 'closed', 'paid_out');
 create type public.debt_status as enum ('open', 'paid', 'written_off');
 create type public.refund_status as enum ('initiated', 'in_review', 'approved', 'paid', 'rejected', 'cancelled');
@@ -73,6 +74,7 @@ create table public.transactions (
   category_id uuid references public.categories(id) on delete set null,
   related_person_id uuid references public.people(id) on delete set null,
   recurring_service_id uuid,
+  transfer_side public.transfer_side,
   type public.transaction_type not null,
   status public.transaction_status not null default 'posted',
   amount_vnd integer not null check (amount_vnd > 0),
@@ -81,7 +83,11 @@ create table public.transactions (
   transfer_pair_id uuid,
   posted_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  check (
+    (type = 'transfer' and transfer_side is not null) or
+    (type <> 'transfer' and transfer_side is null)
+  )
 );
 
 -- ---------- Cashback ----------
@@ -105,7 +111,7 @@ create table public.cashback_entries (
   owner_id uuid not null references public.profiles(id) on delete cascade,
   cashback_cycle_id uuid not null references public.cashback_cycles(id) on delete cascade,
   transaction_id uuid references public.transactions(id) on delete set null,
-  cashback_amount_vnd integer not null check (cashback_amount_vnd >= 0),
+  cashback_amount_vnd integer not null check (cashback_amount_vnd > 0),
   earned_at timestamptz not null,
   posted_transaction_id uuid references public.transactions(id) on delete set null,
   created_at timestamptz not null default now(),
@@ -217,7 +223,7 @@ create table public.recurring_services (
   account_id uuid not null references public.accounts(id) on delete restrict,
   category_id uuid references public.categories(id) on delete set null,
   service_name text not null,
-  expected_amount_vnd integer not null check (expected_amount_vnd >= 0),
+  expected_amount_vnd integer not null check (expected_amount_vnd > 0),
   cadence text not null check (cadence in ('daily', 'weekly', 'monthly', 'yearly', 'custom')),
   cadence_interval integer not null default 1 check (cadence_interval > 0),
   next_due_at timestamptz not null,
@@ -293,6 +299,8 @@ select
       when 'debt_disbursement' then -t.amount_vnd
       when 'debt_repayment' then t.amount_vnd
       when 'installment_payment' then -t.amount_vnd
+      when 'transfer' then
+        case when t.transfer_side = 'in' then t.amount_vnd else -t.amount_vnd end
       when 'adjustment' then t.amount_vnd
       else 0
     end

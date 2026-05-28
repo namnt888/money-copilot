@@ -1,14 +1,14 @@
 # Supabase/Postgres Scaffold (Money Copilot Reboot)
 
 ## 1) SQL scaffold
-Use: `/tmp/workspace/namnt888/money-copilot/supabase/schema.sql`
+Use: `supabase/schema.sql`
 
 ## 2) Table-by-table explanation
 - **profiles**: auth-linked user profile (1:1 with `auth.users`).
 - **people**: contacts for debt/refund/transaction context.
 - **accounts**: user financial accounts (cash, bank, card, etc.). No stored balances.
 - **categories**: normalized category tree for spending/income grouping.
-- **transactions**: canonical ledger and source of truth for money movement.
+- **transactions**: canonical ledger and source of truth for money movement (`transfer_side` handles transfer in/out direction).
 - **cashback_cycles**: cycle windows per account for card cashback accounting.
 - **cashback_entries**: cashback amounts tied to a cycle and source/posting transaction.
 - **debts**: debt principal/outstanding records, always linked to person + account.
@@ -36,6 +36,7 @@ The SQL scaffold already creates workload-focused indexes, including:
 - Enums/check constraints for all typed status/type fields.
 - Monetary values are integer VND (`*_vnd` integer columns).
 - `transactions` are the ledger source of truth; `account_posted_balances` computes balances.
+- Transfer rows must set `transfer_side` (`in` or `out`) for correct per-account balance math.
 - Debt integrity enforced with required `person_id` and `account_id`.
 - Budget uniqueness enforced by `(owner_id, category_id, cycle_month)`.
 - Installment plans enforce exactly one source (`original_transaction_id` XOR `debt_id`).
