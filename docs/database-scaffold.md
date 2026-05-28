@@ -37,7 +37,9 @@ The SQL scaffold already creates workload-focused indexes, including:
 - Monetary values are integer VND (`*_vnd` integer columns).
 - `transactions` are the ledger source of truth; `account_posted_balances` computes balances.
 - Transfer rows must set `transfer_side` (`in` or `out`) for correct per-account balance math.
+- Transfer rows require `transfer_pair_id` to preserve transfer pairing integrity.
 - Debt integrity enforced with required `person_id` and `account_id`.
+- Cashback entries enforce exactly one source reference (`transaction_id` XOR `posted_transaction_id`).
 - Budget uniqueness enforced by `(owner_id, category_id, cycle_month)`.
 - Installment plans enforce exactly one source (`original_transaction_id` XOR `debt_id`).
 - Refund workflow supports staged progression via `refund_stage_history`.

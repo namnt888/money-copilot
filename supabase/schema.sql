@@ -85,7 +85,7 @@ create table public.transactions (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (
-    (type = 'transfer' and transfer_side is not null) or
+    (type = 'transfer' and transfer_side is not null and transfer_pair_id is not null) or
     (type <> 'transfer' and transfer_side is null)
   )
 );
@@ -115,7 +115,7 @@ create table public.cashback_entries (
   earned_at timestamptz not null,
   posted_transaction_id uuid references public.transactions(id) on delete set null,
   created_at timestamptz not null default now(),
-  check (transaction_id is not null or posted_transaction_id is not null)
+  check (num_nonnulls(transaction_id, posted_transaction_id) = 1)
 );
 
 -- ---------- Debt tracking ----------
@@ -234,6 +234,9 @@ create table public.recurring_services (
   unique (owner_id, service_name, account_id)
 );
 
+comment on column public.recurring_services.cadence_interval is
+'Multiplier for cadence (e.g., monthly + 3 means every 3 months).';
+
 -- After recurring_services exists, add deferred FK for transactions.recurring_service_id.
 alter table public.transactions
   add constraint fk_transactions_recurring_service
@@ -301,7 +304,7 @@ select
       when 'installment_payment' then -t.amount_vnd
       when 'transfer' then
         case when t.transfer_side = 'in' then t.amount_vnd else -t.amount_vnd end
-      when 'adjustment' then t.amount_vnd
+      when 'adjustment' then t.amount_vnd -- positive account correction; use expense for debit correction
       else 0
     end
   ), 0) as balance_vnd
