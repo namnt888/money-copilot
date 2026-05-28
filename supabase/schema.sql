@@ -86,9 +86,12 @@ create table public.transactions (
   updated_at timestamptz not null default now(),
   constraint chk_transactions_transfer_fields check (
     (type = 'transfer' and transfer_side is not null and transfer_pair_id is not null) or
-    (type <> 'transfer' and transfer_side is null)
+    (type <> 'transfer' and transfer_side is null and transfer_pair_id is null)
   )
 );
+
+comment on column public.transactions.type is
+'Transaction semantic type. Adjustment is a positive account correction; use expense/income for directional corrections.';
 
 -- ---------- Cashback ----------
 create table public.cashback_cycles (
@@ -113,9 +116,9 @@ create table public.cashback_entries (
   transaction_id uuid references public.transactions(id) on delete set null,
   cashback_amount_vnd integer not null check (cashback_amount_vnd > 0),
   earned_at timestamptz not null,
-  posted_transaction_id uuid references public.transactions(id) on delete set null,
+  payout_transaction_id uuid references public.transactions(id) on delete set null,
   created_at timestamptz not null default now(),
-  constraint chk_cashback_entries_single_transaction_ref check (num_nonnulls(transaction_id, posted_transaction_id) = 1)
+  constraint chk_cashback_entries_single_transaction_ref check (num_nonnulls(transaction_id, payout_transaction_id) = 1)
 );
 
 -- ---------- Debt tracking ----------
@@ -201,9 +204,6 @@ create table public.installment_plans (
   updated_at timestamptz not null default now(),
   constraint chk_installment_plans_single_source check (num_nonnulls(original_transaction_id, debt_id) = 1)
 );
-
-comment on column public.transactions.type is
-'Transaction semantic type. Adjustment is a positive account correction; use expense/income for directional corrections.';
 
 create table public.installment_payments (
   id uuid primary key default gen_random_uuid(),
