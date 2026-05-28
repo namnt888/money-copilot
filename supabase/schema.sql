@@ -84,7 +84,7 @@ create table public.transactions (
   posted_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (
+  constraint chk_transactions_transfer_fields check (
     (type = 'transfer' and transfer_side is not null and transfer_pair_id is not null) or
     (type <> 'transfer' and transfer_side is null)
   )
@@ -102,7 +102,7 @@ create table public.cashback_cycles (
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (cycle_end >= cycle_start),
+  constraint chk_cashback_cycles_valid_dates check (cycle_end >= cycle_start),
   unique (account_id, cycle_start, cycle_end)
 );
 
@@ -115,7 +115,7 @@ create table public.cashback_entries (
   earned_at timestamptz not null,
   posted_transaction_id uuid references public.transactions(id) on delete set null,
   created_at timestamptz not null default now(),
-  check (num_nonnulls(transaction_id, posted_transaction_id) = 1)
+  constraint chk_cashback_entries_single_transaction_ref check (num_nonnulls(transaction_id, posted_transaction_id) = 1)
 );
 
 -- ---------- Debt tracking ----------
@@ -132,7 +132,7 @@ create table public.debts (
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (outstanding_vnd <= principal_vnd)
+  constraint chk_debts_outstanding_not_exceeds_principal check (outstanding_vnd <= principal_vnd)
 );
 
 create table public.debt_repayments (
@@ -181,7 +181,7 @@ create table public.budgets (
   amount_limit_vnd integer not null check (amount_limit_vnd >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (cycle_month = date_trunc('month', cycle_month)::date),
+  constraint chk_budgets_cycle_month_is_first_of_month check (cycle_month = date_trunc('month', cycle_month)::date),
   unique (owner_id, category_id, cycle_month)
 );
 
@@ -199,8 +199,11 @@ create table public.installment_plans (
   status public.installment_status not null default 'active',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  check (num_nonnulls(original_transaction_id, debt_id) = 1)
+  constraint chk_installment_plans_single_source check (num_nonnulls(original_transaction_id, debt_id) = 1)
 );
+
+comment on column public.transactions.type is
+'Transaction semantic type. Adjustment is a positive account correction; use expense/income for directional corrections.';
 
 create table public.installment_payments (
   id uuid primary key default gen_random_uuid(),
@@ -304,7 +307,7 @@ select
       when 'installment_payment' then -t.amount_vnd
       when 'transfer' then
         case when t.transfer_side = 'in' then t.amount_vnd else -t.amount_vnd end
-      when 'adjustment' then t.amount_vnd -- positive account correction; use expense for debit correction
+      when 'adjustment' then t.amount_vnd
       else 0
     end
   ), 0) as balance_vnd
